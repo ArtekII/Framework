@@ -17,7 +17,7 @@ import java.util.jar.JarFile;
 
 import pumpkin.annotation.Controller;
 
-public class Utils {
+public class ControllerScanner {
     public static List<Class<?>> findControllers(String packageName) {
         if (packageName == null || packageName.trim().isEmpty()) {
             throw new IllegalArgumentException("Le nom du package ne doit pas etre vide");
@@ -28,7 +28,7 @@ public class Utils {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
 
         if (classLoader == null) {
-            classLoader = Utils.class.getClassLoader();
+            classLoader = ControllerScanner.class.getClassLoader();
         }
 
         Set<String> classNames = new TreeSet<>();
