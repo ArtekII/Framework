@@ -2,8 +2,7 @@ package pumpkin.servlet;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +52,20 @@ public class FrontControllerServlet extends HttpServlet {
         writer.write("URL : " + url + "<br>");
         writer.write("Controller : " + mapping.getNomClasse() + "<br>");
         writer.write("Methode : " + mapping.getNomMethode() + "<br>");
+
+        Method method;
+        try {
+            Class<?> controllerClass = Class.forName(mapping.getNomClasse());
+            method = controllerClass.getDeclaredMethod(mapping.getNomMethode());
+            Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+            method.invoke(controllerInstance);
+        } catch (Exception e) {
+            res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            writer.write("<h1>Erreur 500</h1>");
+            writer.write("<p>Une erreur est survenue lors de l'execution de la methode</p>");
+            writer.write("<pre>" + e.getMessage() + "</pre>");
+            e.printStackTrace(writer);
+        }
     }
 
     private void writeValidRoutes(PrintWriter writer) {
