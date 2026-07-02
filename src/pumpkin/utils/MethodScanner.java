@@ -58,15 +58,6 @@ public final class MethodScanner {
             }
 
             mappings.put(urlObj, mapping);
-
-            // Avec putIfAbsent
-            Mapping existingMapping = mappings.putIfAbsent(urlObj, mapping);
-
-            if (existingMapping != null) {
-                throw new IllegalStateException(
-                    "L'URL " + url + " est deja associee a " + existingMapping
-                );
-            }
         }
     }
 
