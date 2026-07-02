@@ -10,4 +10,5 @@ import java.lang.annotation.Target;
 
 public @interface UrlMapping {
     String value() default "";
+    String method() default "GET"; // Méthode HTTP par défaut
 }

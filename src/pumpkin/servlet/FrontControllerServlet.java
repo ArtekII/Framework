@@ -10,12 +10,13 @@ import java.util.Map;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import pumpkin.mapping.Mapping;
+import pumpkin.mapping.Url;
 import pumpkin.utils.ControllerScanner;
 import pumpkin.utils.MethodScanner;
 
 public class FrontControllerServlet extends HttpServlet {
-    List<Class<?>> listController = new ArrayList<>();
-    private Map<String, Mapping> routes = new HashMap<>();
+    List<Class<?>> listController;
+    private Map<Url, Mapping> routes;
 
     public void init() throws ServletException {
         String packageName = getInitParameter("controller");
@@ -38,7 +39,8 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        Mapping mapping = routes.get(url);
+        Url urlObj = new Url(url, req.getMethod());
+        Mapping mapping = routes.get(urlObj);
 
         if (mapping == null) {
             res.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -62,10 +64,10 @@ public class FrontControllerServlet extends HttpServlet {
         }
 
         writer.write("<ul>");
-        for (Map.Entry<String, Mapping> entry : routes.entrySet()) {
+        for (Map.Entry<Url, Mapping> entry : routes.entrySet()) {
             Mapping mapping = entry.getValue();
             writer.write("<li>");
-            writer.write(entry.getKey());
+            writer.write(entry.getKey().toString());
             writer.write(" - " + mapping.getNomClasse() + "#Methode :" + mapping.getNomMethode());
             writer.write("</li>");
         }

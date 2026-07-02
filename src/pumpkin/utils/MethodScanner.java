@@ -8,18 +8,19 @@ import java.util.Map;
 import pumpkin.annotation.Controller;
 import pumpkin.annotation.UrlMapping;
 import pumpkin.mapping.Mapping;
+import pumpkin.mapping.Url;
 
 public final class MethodScanner {
 
     private MethodScanner() {
     }
 
-    public static Map<String, Mapping> findMappings(List<Class<?>> controllers) {
+    public static Map<Url, Mapping> findMappings(List<Class<?>> controllers) {
         if (controllers == null) {
             throw new IllegalArgumentException("La liste des controllers ne doit pas etre nulle");
         }
 
-        Map<String, Mapping> mappings = new LinkedHashMap<>();
+        Map<Url, Mapping> mappings = new LinkedHashMap<>();
 
         for (Class<?> controllerClass : controllers) {
             registerControllerMappings(controllerClass, mappings);
@@ -28,7 +29,7 @@ public final class MethodScanner {
         return mappings;
     }
 
-    private static void registerControllerMappings(Class<?> controllerClass, Map<String, Mapping> mappings) {
+    private static void registerControllerMappings(Class<?> controllerClass, Map<Url, Mapping> mappings) {
         if (controllerClass == null) {
             throw new IllegalArgumentException("Une classe controller ne doit pas etre nulle");
         }
@@ -48,14 +49,15 @@ public final class MethodScanner {
             }
 
             String url = buildUrl(controller.path(), urlMapping.value());
-            Mapping mapping = new Mapping(controllerClass.getName(), method.getName());
-            Mapping existingMapping = mappings.putIfAbsent(url, mapping); //assure qu'il n'y a pas de doublon
 
-            if (existingMapping != null) {
-                throw new IllegalStateException(
-                    "L'URL " + url + " est deja associee a " + existingMapping
-                );
+            Url urlObj = new Url(url, urlMapping.method());
+            Mapping mapping = new Mapping(controllerClass.getName(), method.getName());
+            // Assure l'unicité de l'URL. Si une URL est déjà enregistrée, une exception est levée.
+            if (mappings.containsKey(urlObj)) {
+                throw new IllegalStateException("URL deja prise: " + urlObj);
             }
+
+            mappings.put(urlObj, mapping);
         }
     }
 
