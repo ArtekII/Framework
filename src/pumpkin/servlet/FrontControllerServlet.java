@@ -9,18 +9,18 @@ import java.util.Map;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import pumpkin.mapping.Mapping;
-import pumpkin.mapping.Url;
-import pumpkin.utils.ControllerScanner;
-import pumpkin.utils.MethodScanner;
+import pumpkin.mapping.UrlKey;
 
 public class FrontControllerServlet extends HttpServlet {
     List<Class<?>> listController;
-    private Map<Url, Mapping> routes;
+    private Map<UrlKey, Mapping> routes;
 
     public void init() throws ServletException {
-        String packageName = getInitParameter("controller");
-        listController = ControllerScanner.findControllers(packageName);
-        routes = MethodScanner.findMappings(listController);
+        ServletContext context = getServletContext();
+        routes = (Map<UrlKey, Mapping>) context.getAttribute("routes");
+        if (routes == null) {
+            throw new ServletException("Les routes n'ont pas été initialisées.");
+        }
     }
 
     protected void processRequest(HttpServletRequest req, HttpServletResponse res)
@@ -38,7 +38,7 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        Url urlObj = new Url(url, req.getMethod());
+        UrlKey urlObj = new UrlKey(url, req.getMethod());
         Mapping mapping = routes.get(urlObj);
 
         if (mapping == null) {
@@ -52,13 +52,18 @@ public class FrontControllerServlet extends HttpServlet {
         writer.write("URL : " + url + "<br>");
         writer.write("Controller : " + mapping.getNomClasse() + "<br>");
         writer.write("Methode : " + mapping.getNomMethode() + "<br>");
+        writer.write("HTTP Method : " + req.getMethod() + "<br>");
 
         Method method;
         try {
             Class<?> controllerClass = Class.forName(mapping.getNomClasse());
             method = controllerClass.getDeclaredMethod(mapping.getNomMethode());
             Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
-            method.invoke(controllerInstance);
+            Object result = method.invoke(controllerInstance);
+
+            if (result != null) {
+                writer.write("<br>Resultat : " + result.toString());
+            }
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             writer.write("<h1>Erreur 500</h1>");
@@ -77,7 +82,7 @@ public class FrontControllerServlet extends HttpServlet {
         }
 
         writer.write("<ul>");
-        for (Map.Entry<Url, Mapping> entry : routes.entrySet()) {
+        for (Map.Entry<UrlKey, Mapping> entry : routes.entrySet()) {
             Mapping mapping = entry.getValue();
             writer.write("<li>");
             writer.write(entry.getKey().toString());

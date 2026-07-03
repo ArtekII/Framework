@@ -18,7 +18,7 @@ import java.util.jar.JarFile;
 import pumpkin.annotation.Controller;
 
 public class ControllerScanner {
-    public static List<Class<?>> findControllers(String packageName) {
+    public static void findControllers(String packageName, List<Class<?>> controllers) {
         if (packageName == null || packageName.trim().isEmpty()) {
             throw new IllegalArgumentException("Le nom du package ne doit pas etre vide");
         }
@@ -46,7 +46,6 @@ public class ControllerScanner {
                 }
             }
 
-            List<Class<?>> controllers = new ArrayList<>();
             for (String className : classNames) {
                 Class<?> clazz = Class.forName(className, false, classLoader);
                 if (clazz.isAnnotationPresent(Controller.class)) {
@@ -54,7 +53,7 @@ public class ControllerScanner {
                 }
             }
 
-            return controllers;
+            
         } catch (IOException | URISyntaxException | ClassNotFoundException e) {
             throw new IllegalStateException(
                 "Impossible de rechercher les controllers dans le package " + packageName,

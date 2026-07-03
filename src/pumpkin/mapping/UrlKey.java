@@ -1,10 +1,10 @@
 package pumpkin.mapping;
 
-public class Url {
+public class UrlKey {
     String path;
     String method;
 
-    public Url(String path, String method) {
+    public UrlKey(String path, String method) {
         this.path = path;
         this.method = method;
     }
@@ -35,7 +35,7 @@ public class Url {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
 
-        Url url = (Url) obj;
+        UrlKey url = (UrlKey) obj;
 
         if (!path.equals(url.path)) return false;
         return method.equals(url.method);

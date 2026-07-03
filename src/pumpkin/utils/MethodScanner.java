@@ -8,28 +8,28 @@ import java.util.Map;
 import pumpkin.annotation.Controller;
 import pumpkin.annotation.UrlMapping;
 import pumpkin.mapping.Mapping;
-import pumpkin.mapping.Url;
+import pumpkin.mapping.UrlKey;
 
 public final class MethodScanner {
 
     private MethodScanner() {
     }
 
-    public static Map<Url, Mapping> findMappings(List<Class<?>> controllers) {
+    public static void findMappings(String packageName, List<Class<?>> controllers, Map<UrlKey, Mapping> mappings) {
         if (controllers == null) {
             throw new IllegalArgumentException("La liste des controllers ne doit pas etre nulle");
         }
 
-        Map<Url, Mapping> mappings = new LinkedHashMap<>();
+        ControllerScanner.findControllers(packageName, controllers);
 
         for (Class<?> controllerClass : controllers) {
             registerControllerMappings(controllerClass, mappings);
         }
 
-        return mappings;
+        // return mappings;
     }
 
-    private static void registerControllerMappings(Class<?> controllerClass, Map<Url, Mapping> mappings) {
+    private static void registerControllerMappings(Class<?> controllerClass, Map<UrlKey, Mapping> mappings) {
         if (controllerClass == null) {
             throw new IllegalArgumentException("Une classe controller ne doit pas etre nulle");
         }
@@ -50,7 +50,7 @@ public final class MethodScanner {
 
             String url = buildUrl(controller.path(), urlMapping.value());
 
-            Url urlObj = new Url(url, urlMapping.method());
+            UrlKey urlObj = new UrlKey(url, urlMapping.method());
             Mapping mapping = new Mapping(controllerClass.getName(), method.getName());
             // Assure l'unicité de l'URL. Si une URL est déjà enregistrée, une exception est levée.
             if (mappings.containsKey(urlObj)) {
