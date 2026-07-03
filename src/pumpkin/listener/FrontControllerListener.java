@@ -10,7 +10,6 @@ import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
 import java.util.HashMap;
-import pumpkin.utils.ControllerScanner;
 import pumpkin.utils.MethodScanner;
 import pumpkin.mapping.Mapping;
 import pumpkin.mapping.UrlKey;
@@ -30,7 +29,7 @@ public class FrontControllerListener implements ServletContextListener {
 
 
             String packageName = context.getInitParameter("controller");
-            routes = MethodScanner.findMappings(packageName, controllers);
+            MethodScanner.findMappings(packageName, controllers, routes);
 
             context.setAttribute("routes", routes);
 

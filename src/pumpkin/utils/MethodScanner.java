@@ -15,19 +15,18 @@ public final class MethodScanner {
     private MethodScanner() {
     }
 
-    public static Map<UrlKey, Mapping> findMappings(String packageName, List<Class<?>> controllers) {
+    public static void findMappings(String packageName, List<Class<?>> controllers, Map<UrlKey, Mapping> mappings) {
         if (controllers == null) {
             throw new IllegalArgumentException("La liste des controllers ne doit pas etre nulle");
         }
 
-        Map<UrlKey, Mapping> mappings = new LinkedHashMap<>();
         ControllerScanner.findControllers(packageName, controllers);
 
         for (Class<?> controllerClass : controllers) {
             registerControllerMappings(controllerClass, mappings);
         }
 
-        return mappings;
+        // return mappings;
     }
 
     private static void registerControllerMappings(Class<?> controllerClass, Map<UrlKey, Mapping> mappings) {
