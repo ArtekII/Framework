@@ -52,6 +52,7 @@ public class FrontControllerServlet extends HttpServlet {
         writer.write("URL : " + url + "<br>");
         writer.write("Controller : " + mapping.getNomClasse() + "<br>");
         writer.write("Methode : " + mapping.getNomMethode() + "<br>");
+        writer.write("HTTP Method : " + req.getMethod() + "<br>");
 
         Method method;
         try {
