@@ -1,4 +1,4 @@
-package pumpkin.mapping;
+package autumn.mapping;
 
 public class Mapping {
     // il faut assuer l'uniciter de l'url, quand on fait /liste, il faut pas qu'il y ait un autre /liste

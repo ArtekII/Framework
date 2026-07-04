@@ -1,4 +1,4 @@
-package pumpkin.servlet;
+package autumn.servlet;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -6,10 +6,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
+import autumn.mapping.Mapping;
+import autumn.mapping.UrlKey;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
-import pumpkin.mapping.Mapping;
-import pumpkin.mapping.UrlKey;
 
 public class FrontControllerServlet extends HttpServlet {
     List<Class<?>> listController;

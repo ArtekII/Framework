@@ -1,4 +1,4 @@
-package pumpkin.mapping;
+package autumn.mapping;
 
 public class UrlKey {
     String path;
