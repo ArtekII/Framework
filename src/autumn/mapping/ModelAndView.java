@@ -1,23 +1,33 @@
 package autumn.mapping;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class ModelAndView {
 
-    private Map<String, Object> model;
-    private String viewChemin;
+    private Map<String, Object> model = new HashMap<>();
+    private String url;
 
-    public ModelAndView(String viewName, Map<String, Object> model) {
-        this.viewChemin = viewName;
+    public ModelAndView() {
+        this.model = new HashMap<>();
+    }
+
+    public ModelAndView(String url) {
+        this.url = url;
+        this.model = new HashMap<>();
+    }
+
+    public ModelAndView(String url, Map<String, Object> model) {
+        this.url = url;
         this.model = model;
     }
 
-    public String getViewChemin() {
-        return viewChemin;
+    public String getUrl() {
+        return url;
     }
 
-    public void setViewChemin(String viewName) {
-        this.viewChemin = viewName;
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     public Map<String, Object> getModel() {
@@ -26,6 +36,10 @@ public class ModelAndView {
 
     public void setModel(Map<String, Object> model) {
         this.model = model;
+    }
+
+    public void addAttribute(String key, Object value) {
+        this.model.put(key, value);
     }
     
 }

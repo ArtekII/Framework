@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-JAR_NAME="pumpkin"
+JAR_NAME="autumn"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
 BUILD_DIR="$SCRIPT_DIR/build"

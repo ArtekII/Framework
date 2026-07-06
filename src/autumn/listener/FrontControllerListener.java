@@ -34,11 +34,17 @@ public class FrontControllerListener implements ServletContextListener {
 
             String packageName = context.getInitParameter("controller");
 
-            String viewsDirectory = context.getInitParameter("prefix");
+            String prefix = context.getInitParameter("prefix");
             String suffix = context.getInitParameter("suffix");
 
+            String viewDirectory = context.getRealPath(prefix);
+
+            if (viewDirectory == null) {
+                throw new IllegalStateException("Impossible de résoudre le chemin réel des vues: " + prefix);
+            }
+
             MethodScanner.findMappings(packageName, controllers, routes);
-            ViewScanner.findViews(viewsDirectory, suffix, views);
+            ViewScanner.findViews(viewDirectory, suffix, views);
 
             context.setAttribute("routes", routes);
             context.setAttribute("views", views);
