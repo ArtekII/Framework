@@ -1,14 +1,13 @@
-package pumpkin.utils;
+package autumn.utils;
 
 import java.lang.reflect.Method;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import pumpkin.annotation.Controller;
-import pumpkin.annotation.UrlMapping;
-import pumpkin.mapping.Mapping;
-import pumpkin.mapping.UrlKey;
+import autumn.annotation.Controller;
+import autumn.annotation.UrlMapping;
+import autumn.mapping.Mapping;
+import autumn.mapping.UrlKey;
 
 public final class MethodScanner {
 

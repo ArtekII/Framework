@@ -1,23 +1,27 @@
-package pumpkin.servlet;
+package autumn.servlet;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
+import autumn.mapping.Mapping;
+import autumn.mapping.ModelAndView;
+import autumn.mapping.UrlKey;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
-import pumpkin.mapping.Mapping;
-import pumpkin.mapping.UrlKey;
 
 public class FrontControllerServlet extends HttpServlet {
     List<Class<?>> listController;
     private Map<UrlKey, Mapping> routes;
+    private List<File> views;
 
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         routes = (Map<UrlKey, Mapping>) context.getAttribute("routes");
+        views = (List<File>) context.getAttribute("views");
         if (routes == null) {
             throw new ServletException("Les routes n'ont pas été initialisées.");
         }
@@ -35,6 +39,9 @@ public class FrontControllerServlet extends HttpServlet {
 
         if ("/".equals(url)) {
             writeValidRoutes(writer);
+            // for (File view : views) {
+            //     writer.write("<p>Vue trouvée : " + view.getAbsolutePath() + "</p>");
+            // }
             return;
         }
 
@@ -62,7 +69,48 @@ public class FrontControllerServlet extends HttpServlet {
             Object result = method.invoke(controllerInstance);
 
             if (result != null) {
-                writer.write("<br>Resultat : " + result.toString());
+                
+                if(result instanceof ModelAndView) {
+
+                    String viewName = ((ModelAndView) result).getUrl();
+                    Map<String, Object> model = ((ModelAndView) result).getModel();
+                    
+                    String prefix = getServletContext().getInitParameter("prefix");
+                    String suffix = getServletContext().getInitParameter("suffix");
+                    
+                    String viewPath = prefix + viewName + suffix;
+                    // /WEB-INF/views/test/list.jsp
+
+                    String realExpectedPath = getServletContext().getRealPath(viewPath);
+                    // /home/itu/.../Framework/src/main/webapp/WEB-INF/views/test/list.jsp
+                    boolean exists = false;
+
+                    for (File view : views) {
+                        if (view.getAbsolutePath().equals(realExpectedPath)) {
+                            exists = true;
+                            break;
+                        }
+                    }
+
+                    if(exists && !model.isEmpty()) {
+                        // writer.write("<br>La vue " + viewPath + " existe et le model n'est pas vide.");
+                        for(Map.Entry<String, Object> entry : model.entrySet()) {
+                            req.setAttribute(entry.getKey(), entry.getValue());
+                        }
+                        RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
+                        dispatcher.forward(req, res);
+                    } else if(exists) {
+                        // writer.write("<br>La vue " + viewPath + " existe mais le model est vide.");
+                        RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
+                        dispatcher.forward(req, res);
+                    } else {
+                        writer.write("<br>La vue " + viewPath + " n'existe pas.");
+                    }
+                } else {
+                    writer.write("<br>Resultat : " + result.toString());
+                }
+
+                
             }
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
