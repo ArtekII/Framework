@@ -1,5 +1,6 @@
 package autumn.servlet;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
@@ -14,10 +15,12 @@ import jakarta.servlet.http.*;
 public class FrontControllerServlet extends HttpServlet {
     List<Class<?>> listController;
     private Map<UrlKey, Mapping> routes;
+    private List<File> views;
 
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         routes = (Map<UrlKey, Mapping>) context.getAttribute("routes");
+        views = (List<File>) context.getAttribute("views");
         if (routes == null) {
             throw new ServletException("Les routes n'ont pas été initialisées.");
         }
@@ -35,6 +38,9 @@ public class FrontControllerServlet extends HttpServlet {
 
         if ("/".equals(url)) {
             writeValidRoutes(writer);
+            for (File view : views) {
+                writer.write("<p>Vue trouvée : " + view.getAbsolutePath() + "</p>");
+            }
             return;
         }
 

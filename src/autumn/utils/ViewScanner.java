@@ -1,15 +1,35 @@
 package autumn.utils;
 
+import java.io.File;
 import java.util.List;
 
 public class ViewScanner {
-    public static void findViews(String packageName, List<Class<?>> views) {
-        if (packageName == null || packageName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Le nom du package ne doit pas etre vide");
+    
+    public static void findViews(String directoryPath, String suffix, List<File> views) {
+        if (directoryPath == null || directoryPath.trim().isEmpty()) {
+            throw new IllegalArgumentException("Le chemin du dossier ne doit pas être vide");
         }
 
-        String packName = packageName.trim();
-        // Implémentation de la recherche des vues dans le package spécifié
-        // Cette méthode peut être similaire à findControllers, mais adaptée pour les vues
+        File folder = new File(directoryPath.trim());
+        
+        if (!folder.exists() || !folder.isDirectory()) {
+            throw new IllegalArgumentException("Le chemin " + directoryPath + " n'existe pas ou n'est pas un dossier");
+        }
+
+        File[] files = folder.listFiles();
+        
+        if (files == null) {
+            return; 
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                findViews(file.getAbsolutePath(), suffix, views);
+            } else {
+                if (file.getName().toLowerCase().endsWith(suffix.toLowerCase())) {
+                    views.add(file);
+                }
+            }
+        }
     }
 }
