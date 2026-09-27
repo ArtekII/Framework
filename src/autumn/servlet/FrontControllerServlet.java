@@ -6,8 +6,6 @@ import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
-import com.google.gson.Gson;
-import autumn.annotation.WebApiRest;
 
 import autumn.mapping.Mapping;
 import autumn.mapping.ModelAndView;
@@ -16,7 +14,6 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
 public class FrontControllerServlet extends HttpServlet {
-    private final Gson gson = new Gson();
     List<Class<?>> listController;
     private Map<UrlKey, Mapping> routes;
     private List<File> views;
@@ -34,13 +31,14 @@ public class FrontControllerServlet extends HttpServlet {
         throws ServletException, IOException {
         res.setContentType("text/html;charset=UTF-8");
         String url = req.getRequestURI().substring(req.getContextPath().length());
+        PrintWriter writer = res.getWriter();
 
         if (url.isEmpty()) {
             url = "/";
         }
 
         if ("/".equals(url)) {
-            writeValidRoutes(res.getWriter());
+            writeValidRoutes(writer);
             // for (File view : views) {
             //     writer.write("<p>Vue trouvée : " + view.getAbsolutePath() + "</p>");
             // }
@@ -51,7 +49,6 @@ public class FrontControllerServlet extends HttpServlet {
         Mapping mapping = routes.get(urlObj);
 
         if (mapping == null) {
-            PrintWriter writer = res.getWriter();
             res.setStatus(HttpServletResponse.SC_NOT_FOUND);
             writer.write("<h1>Erreur 404</h1>");
             writer.write("<p>" + url + " n'est pas un lien valide </p>");
@@ -59,31 +56,19 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
+        writer.write("URL : " + url + "<br>");
+        writer.write("Controller : " + mapping.getNomClasse() + "<br>");
+        writer.write("Methode : " + mapping.getNomMethode() + "<br>");
+        writer.write("HTTP Method : " + req.getMethod() + "<br>");
+
         Method method;
-        boolean rest = false;
         try {
             Class<?> controllerClass = Class.forName(mapping.getNomClasse());
             method = controllerClass.getDeclaredMethod(mapping.getNomMethode());
-            rest = method.isAnnotationPresent(WebApiRest.class);
             Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
             Object result = method.invoke(controllerInstance);
 
-            if (rest) {
-                String json = result instanceof String ? (String) result : gson.toJson(result);
-                res.setContentType("application/json");
-                res.setCharacterEncoding("UTF-8");
-                res.getWriter().write(json);
-                return;
-            }
-
-            PrintWriter writer = res.getWriter();
-
             if (result != null) {
-
-                if(method.isAnnotationPresent(autumn.annotation.WebApiRest.class)) {
-                    res.setContentType("application/json");
-                    
-                }
                 
                 if(result instanceof ModelAndView) {
 
@@ -129,14 +114,6 @@ public class FrontControllerServlet extends HttpServlet {
             }
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            if (rest) {
-                res.setContentType("application/json");
-                res.setCharacterEncoding("UTF-8");
-                res.getWriter().write("{\"error\":\"Erreur lors de l'execution de la methode\"}");
-                getServletContext().log("Erreur dans une methode REST", e);
-                return;
-            }
-            PrintWriter writer = res.getWriter();
             writer.write("<h1>Erreur 500</h1>");
             writer.write("<p>Une erreur est survenue lors de l'execution de la methode</p>");
             writer.write("<pre>" + e.getMessage() + "</pre>");
