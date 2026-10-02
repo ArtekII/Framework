@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Map;
 import com.google.gson.Gson;
@@ -15,7 +16,13 @@ import autumn.mapping.UrlKey;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
+
 public class FrontControllerServlet extends HttpServlet {
+    private static class BindingException extends RuntimeException {
+        BindingException(String message) {
+            super(message);
+        }
+    }
     private final Gson gson = new Gson();
     List<Class<?>> listController;
     private Map<UrlKey, Mapping> routes;
@@ -59,14 +66,29 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        Method method;
+        Method method; Object result = null;
         boolean rest = false;
         try {
             Class<?> controllerClass = Class.forName(mapping.getNomClasse());
-            method = controllerClass.getDeclaredMethod(mapping.getNomMethode());
+            method = mapping.getMethod();
             rest = method.isAnnotationPresent(WebApiRest.class);
             Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
-            Object result = method.invoke(controllerInstance);
+            
+            if (method.getParameterCount() > 0) {
+                Parameter[] parameters = method.getParameters();
+                Object[] arguments = new Object[parameters.length];
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter parameter = parameters[i];
+                    String name = parameter.getName();
+                    Class<?> type = parameter.getType();
+
+                    String value = req.getParameter(name);
+                    arguments[i] = convertParameter(name, value, type);
+                }
+                result = method.invoke(controllerInstance, arguments);
+            } else {
+                result = method.invoke(controllerInstance);
+            }
 
             if (rest) {
                 String json = result instanceof String ? (String) result : gson.toJson(result);
@@ -79,11 +101,6 @@ public class FrontControllerServlet extends HttpServlet {
             PrintWriter writer = res.getWriter();
 
             if (result != null) {
-
-                if(method.isAnnotationPresent(autumn.annotation.WebApiRest.class)) {
-                    res.setContentType("application/json");
-                    
-                }
                 
                 if(result instanceof ModelAndView) {
 
@@ -127,6 +144,19 @@ public class FrontControllerServlet extends HttpServlet {
 
                 
             }
+            } catch (BindingException e) {
+            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            res.setCharacterEncoding("UTF-8");
+
+            if (rest) {
+                res.setContentType("application/json");
+                res.getWriter().write(
+                    gson.toJson(Map.of("error", e.getMessage()))
+                );
+            } else {
+                res.setContentType("text/plain");
+                res.getWriter().write(e.getMessage());
+    }
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             if (rest) {
@@ -161,6 +191,52 @@ public class FrontControllerServlet extends HttpServlet {
             writer.write("</li>");
         }
         writer.write("</ul>");
+    }
+
+    private Object convertParameter(String name, String value, Class<?> type) {
+
+        boolean supported =
+            type == String.class
+            || type == int.class || type == Integer.class
+            || type == long.class || type == Long.class
+            || type == double.class || type == Double.class;
+
+
+        if (!supported) {
+            throw new IllegalArgumentException(
+                "Type de paramètre non supporté : " + type.getName()
+            );
+        }
+
+        if (value == null) {
+            if (type.isPrimitive()) {
+                throw new BindingException(
+                    "Paramètre obligatoire absent : " + name
+                );
+            }
+            return null;
+        }
+
+        if (type == String.class) {
+            return value;
+        }
+
+        try {
+            if (type == int.class || type == Integer.class) {
+                return Integer.valueOf(value);
+            }
+
+            if (type == long.class || type == Long.class) {
+                return Long.valueOf(value);
+            }
+
+            return Double.valueOf(value);
+
+        } catch (NumberFormatException e) {
+            throw new BindingException(
+                "Le paramètre " + name + " doit être une valeur valide de type " + type.getSimpleName()
+            );
+        }
     }
 
     @Override
