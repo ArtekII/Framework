@@ -51,6 +51,7 @@ public final class MethodScanner {
 
             UrlKey urlObj = new UrlKey(url, urlMapping.method());
             Mapping mapping = new Mapping(controllerClass.getName(), method.getName());
+            mapping.setMethod(method);
             // Assure l'unicité de l'URL. Si une URL est déjà enregistrée, une exception est levée.
             if (mappings.containsKey(urlObj)) {
                 throw new IllegalStateException("URL deja prise: " + urlObj);
