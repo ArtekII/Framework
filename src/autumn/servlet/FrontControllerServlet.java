@@ -28,6 +28,7 @@ public class FrontControllerServlet extends HttpServlet {
     private Map<UrlKey, Mapping> routes;
     private List<File> views;
 
+    @Override
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         routes = (Map<UrlKey, Mapping>) context.getAttribute("routes");
@@ -40,173 +41,86 @@ public class FrontControllerServlet extends HttpServlet {
     protected void processRequest(HttpServletRequest req, HttpServletResponse res)
         throws ServletException, IOException {
         res.setContentType("text/html;charset=UTF-8");
-        String url = req.getRequestURI().substring(req.getContextPath().length());
-
-        if (url.isEmpty()) {
-            url = "/";
-        }
+        String url = getRequestPath(req);
 
         if ("/".equals(url)) {
             writeValidRoutes(res.getWriter());
-            // for (File view : views) {
-            //     writer.write("<p>Vue trouvée : " + view.getAbsolutePath() + "</p>");
-            // }
             return;
         }
 
-        UrlKey urlObj = new UrlKey(url, req.getMethod());
-        Mapping mapping = routes.get(urlObj);
-
+        Mapping mapping = routes.get(new UrlKey(url, req.getMethod()));
         if (mapping == null) {
-            PrintWriter writer = res.getWriter();
-            res.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            writer.write("<h1>Erreur 404</h1>");
-            writer.write("<p>" + url + " n'est pas un lien valide </p>");
-            writeValidRoutes(writer);
+            writeNotFound(res, url);
             return;
         }
 
-        Method method; Object result = null;
         boolean rest = false;
         try {
             Class<?> controllerClass = Class.forName(mapping.getNomClasse());
-            method = mapping.getMethod();
+            Method method = mapping.getMethod();
             rest = method.isAnnotationPresent(WebApiRest.class);
-            Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
-            
-            if (method.getParameterCount() > 0) {
-                Parameter[] parameters = method.getParameters();
-                Object[] arguments = new Object[parameters.length];
-                for (int i = 0; i < parameters.length; i++) {
-                    Parameter parameter = parameters[i];
-                    String name = parameter.getName();
-                    Class<?> type = parameter.getType();
-
-                    String value = req.getParameter(name);
-                    arguments[i] = convertParameter(name, value, type);
-                }
-                result = method.invoke(controllerInstance, arguments);
-            } else {
-                result = method.invoke(controllerInstance);
-            }
-
-            if (rest) {
-                String json = result instanceof String ? (String) result : gson.toJson(result);
-                res.setContentType("application/json");
-                res.setCharacterEncoding("UTF-8");
-                res.getWriter().write(json);
-                return;
-            }
-
-            PrintWriter writer = res.getWriter();
-
-            if (result != null) {
-                
-                if(result instanceof ModelAndView) {
-
-                    String viewName = ((ModelAndView) result).getUrl();
-                    Map<String, Object> model = ((ModelAndView) result).getModel();
-                    
-                    String prefix = getServletContext().getInitParameter("prefix");
-                    String suffix = getServletContext().getInitParameter("suffix");
-                    
-                    String viewPath = prefix + viewName + suffix;
-                    // /WEB-INF/views/test/list.jsp
-
-                    String realExpectedPath = getServletContext().getRealPath(viewPath);
-                    // /home/itu/.../Framework/src/main/webapp/WEB-INF/views/test/list.jsp
-                    boolean exists = false;
-
-                    for (File view : views) {
-                        if (view.getAbsolutePath().equals(realExpectedPath)) {
-                            exists = true;
-                            break;
-                        }
-                    }
-
-                    if(exists && !model.isEmpty()) {
-                        // writer.write("<br>La vue " + viewPath + " existe et le model n'est pas vide.");
-                        for(Map.Entry<String, Object> entry : model.entrySet()) {
-                            req.setAttribute(entry.getKey(), entry.getValue());
-                        }
-                        RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
-                        dispatcher.forward(req, res);
-                    } else if(exists) {
-                        // writer.write("<br>La vue " + viewPath + " existe mais le model est vide.");
-                        RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
-                        dispatcher.forward(req, res);
-                    } else {
-                        writer.write("<br>La vue " + viewPath + " n'existe pas.");
-                    }
-                } else {
-                    writer.write("<br>Resultat : " + result.toString());
-                }
-
-                
-            }
-            } catch (BindingException e) {
-            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            res.setCharacterEncoding("UTF-8");
-
-            if (rest) {
-                res.setContentType("application/json");
-                res.getWriter().write(
-                    gson.toJson(Map.of("error", e.getMessage()))
-                );
-            } else {
-                res.setContentType("text/plain");
-                res.getWriter().write(e.getMessage());
-    }
+            Object result = invokeController(controllerClass, method, req);
+            renderResult(req, res, result, rest);
+        } catch (BindingException e) {
+            writeBindingError(res, e, rest);
         } catch (Exception e) {
-            res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            if (rest) {
-                res.setContentType("application/json");
-                res.setCharacterEncoding("UTF-8");
-                res.getWriter().write("{\"error\":\"Erreur lors de l'execution de la methode\"}");
-                getServletContext().log("Erreur dans une methode REST", e);
-                return;
-            }
-            PrintWriter writer = res.getWriter();
-            writer.write("<h1>Erreur 500</h1>");
-            writer.write("<p>Une erreur est survenue lors de l'execution de la methode</p>");
-            writer.write("<pre>" + e.getMessage() + "</pre>");
-            e.printStackTrace(writer);
+            writeServerError(res, e, rest);
         }
     }
 
-    private void writeValidRoutes(PrintWriter writer) {
-        writer.write("<h2>URLs valides</h2>");
+    private String getRequestPath(HttpServletRequest req) {
+        String path = req.getRequestURI().substring(req.getContextPath().length());
+        return path.isEmpty() ? "/" : path;
+    }
 
-        if (routes.isEmpty()) {
-            writer.write("<p>Aucune URL n'est enregistree.</p>");
-            return;
+    private Object invokeController(Class<?> controllerClass, Method method,
+                                    HttpServletRequest req) throws ReflectiveOperationException {
+        Object controller = controllerClass.getDeclaredConstructor().newInstance();
+        return method.invoke(controller, bindArguments(method, req));
+    }
+
+    private Object[] bindArguments(Method method, HttpServletRequest req)
+        throws ReflectiveOperationException {
+        Parameter[] parameters = method.getParameters();
+        Object[] arguments = new Object[parameters.length];
+
+        if (parameters.length == 1 && !verifyType(parameters[0].getType())) {
+            arguments[0] = bindBean(parameters[0].getType(), req);
+            return arguments;
         }
 
-        writer.write("<ul>");
-        for (Map.Entry<UrlKey, Mapping> entry : routes.entrySet()) {
-            Mapping mapping = entry.getValue();
-            writer.write("<li>");
-            writer.write(entry.getKey().toString());
-            writer.write(" - " + mapping.getNomClasse() + "#Methode :" + mapping.getNomMethode());
-            writer.write("</li>");
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            String name = parameter.getName();
+            arguments[i] = convertParameter(name, req.getParameter(name), parameter.getType());
         }
-        writer.write("</ul>");
+        return arguments;
+    }
+
+    private Object bindBean(Class<?> beanType, HttpServletRequest req)
+        throws ReflectiveOperationException {
+        Object bean = beanType.getDeclaredConstructor().newInstance();
+
+        for (Map.Entry<String, String[]> entry : req.getParameterMap().entrySet()) {
+            String name = entry.getKey();
+            String[] values = entry.getValue();
+            if (name.isEmpty() || values == null || values.length == 0) {
+                continue;
+            }
+            setBeanProperty(bean, beanType, name, values[0]);
+        }
+        return bean;
+    }
+
+    private void setBeanProperty(Object bean, Class<?> beanType, String name, String value)
+        throws ReflectiveOperationException {
+        Class<?> fieldType = beanType.getDeclaredField(name).getType();
+        String setterName = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        Method setter = beanType.getMethod(setterName, fieldType);
+        setter.invoke(bean, convertParameter(name, value, fieldType));
     }
 
     private Object convertParameter(String name, String value, Class<?> type) {
-
-        boolean supported =
-            type == String.class
-            || type == int.class || type == Integer.class
-            || type == long.class || type == Long.class
-            || type == double.class || type == Double.class;
-
-
-        if (!supported) {
-            throw new IllegalArgumentException(
-                "Type de paramètre non supporté : " + type.getName()
-            );
-        }
 
         if (value == null) {
             if (type.isPrimitive()) {
@@ -239,6 +153,125 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
+    private boolean verifyType(Class<?> type) {
+        boolean supported =
+            type == String.class
+            || type == int.class || type == Integer.class
+            || type == long.class || type == Long.class
+            || type == double.class || type == Double.class;
+
+
+        return supported;
+    }
+    private void renderResult(HttpServletRequest req, HttpServletResponse res,
+                              Object result, boolean rest) throws ServletException, IOException {
+        if (rest) {
+            String json = result instanceof String ? (String) result : gson.toJson(result);
+            writeJson(res, json);
+            return;
+        }
+
+        PrintWriter writer = res.getWriter();
+        if (result instanceof ModelAndView) {
+            renderView(req, res, (ModelAndView) result);
+        } else if (result != null) {
+            writer.write("<br>Resultat : " + result.toString());
+        }
+    }
+
+    private void renderView(HttpServletRequest req, HttpServletResponse res,
+                            ModelAndView modelAndView) throws ServletException, IOException {
+        String prefix = getServletContext().getInitParameter("prefix");
+        String suffix = getServletContext().getInitParameter("suffix");
+        String viewPath = prefix + modelAndView.getUrl() + suffix;
+
+        if (!viewExists(viewPath)) {
+            res.getWriter().write("<br>La vue " + viewPath + " n'existe pas.");
+            return;
+        }
+
+        Map<String, Object> model = modelAndView.getModel();
+        if (!model.isEmpty()) {
+            for (Map.Entry<String, Object> entry : model.entrySet()) {
+                req.setAttribute(entry.getKey(), entry.getValue());
+            }
+        }
+        req.getRequestDispatcher(viewPath).forward(req, res);
+    }
+
+    private boolean viewExists(String viewPath) {
+        String realPath = getServletContext().getRealPath(viewPath);
+        for (File view : views) {
+            if (view.getAbsolutePath().equals(realPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void writeJson(HttpServletResponse res, String json) throws IOException {
+        res.setContentType("application/json");
+        res.setCharacterEncoding("UTF-8");
+        res.getWriter().write(json);
+    }
+
+    private void writeNotFound(HttpServletResponse res, String url) throws IOException {
+        PrintWriter writer = res.getWriter();
+        res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+        writer.write("<h1>Erreur 404</h1>");
+        writer.write("<p>" + url + " n'est pas un lien valide </p>");
+        writeValidRoutes(writer);
+    }
+
+    private void writeBindingError(HttpServletResponse res, BindingException error, boolean rest)
+        throws IOException {
+        res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        res.setCharacterEncoding("UTF-8");
+        if (rest) {
+            writeJson(res, gson.toJson(Map.of("error", error.getMessage())));
+        } else {
+            res.setContentType("text/plain");
+            res.getWriter().write(error.getMessage());
+        }
+    }
+
+    private void writeServerError(HttpServletResponse res, Exception error, boolean rest)
+        throws IOException {
+        res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        if (rest) {
+            writeJson(res, "{\"error\":\"Erreur lors de l'execution de la methode\"}");
+            getServletContext().log("Erreur dans une methode REST", error);
+            return;
+        }
+
+        PrintWriter writer = res.getWriter();
+        writer.write("<h1>Erreur 500</h1>");
+        writer.write("<p>Une erreur est survenue lors de l'execution de la methode</p>");
+        writer.write("<pre>" + error.getMessage() + "</pre>");
+        error.printStackTrace(writer);
+    }
+
+    private void writeValidRoutes(PrintWriter writer) {
+        writer.write("<h2>URLs valides</h2>");
+
+        if (routes.isEmpty()) {
+            writer.write("<p>Aucune URL n'est enregistree.</p>");
+            return;
+        }
+
+        writer.write("<ul>");
+        for (Map.Entry<UrlKey, Mapping> entry : routes.entrySet()) {
+            Mapping mapping = entry.getValue();
+            writer.write("<li>");
+            writer.write(entry.getKey().toString());
+            writer.write(" - " + mapping.getNomClasse() + "#Methode :" + mapping.getNomMethode());
+            writer.write("</li>");
+        }
+        writer.write("</ul>");
+    }
+
+
+
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res)
         throws ServletException, IOException {
@@ -246,8 +279,8 @@ public class FrontControllerServlet extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest req,HttpServletResponse res)
+    protected void doPost(HttpServletRequest req, HttpServletResponse res)
         throws ServletException, IOException {
         processRequest(req, res);
-    }    
+    }
 }
