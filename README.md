@@ -1,5 +1,35 @@
 # Framework
 
+## Upload de fichiers
+
+Un champ de formulaire est automatiquement lié à un argument `MapFile`,
+ou à un attribut `MapFile` du bean passé au controller (avec un setter public).
+Le nom du champ HTML doit correspondre au nom du paramètre ou de l'attribut.
+
+```html
+<form action="upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="document">
+    <button type="submit">Envoyer</button>
+</form>
+```
+
+```java
+public String upload(MapFile document) {
+    return document == null ? "Aucun fichier" : document.getFilename();
+}
+```
+
+`MapFile` contient le nom complet sans chemin (`report.pdf`), l'extension
+sans point (`pdf`) et le contenu sous forme de `Byte[]`. Un fichier absent
+donne `null` ; un fichier sélectionné de zéro octet reste un `MapFile` valide.
+Les fichiers sont chargés entièrement en mémoire.
+
+Compiler les controllers avec `javac -parameters` pour conserver les noms
+des arguments. Le script `make-jar.sh` utilise aussi cette option.
+Le servlet porte `@MultipartConfig` ; si les annotations sont désactivées
+dans le déploiement, déclarer `<multipart-config/>` dans sa déclaration
+`<servlet>` du `web.xml`.
+
 ## Réponses JSON
 
 Ajouter `@WebApiRest` sur une méthode de controller, en plus de `@UrlMapping`.

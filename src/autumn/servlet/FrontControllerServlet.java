@@ -2,6 +2,7 @@ package autumn.servlet;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -9,14 +10,17 @@ import java.util.List;
 import java.util.Map;
 import com.google.gson.Gson;
 import autumn.annotation.WebApiRest;
-
+import java.lang.reflect.Field;
 import autumn.mapping.Mapping;
+import autumn.mapping.MapFile;
 import autumn.mapping.ModelAndView;
 import autumn.mapping.UrlKey;
 import jakarta.servlet.*;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
 
 
+@MultipartConfig
 public class FrontControllerServlet extends HttpServlet {
     private static class BindingException extends RuntimeException {
         BindingException(String message) {
@@ -92,7 +96,9 @@ public class FrontControllerServlet extends HttpServlet {
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             String name = parameter.getName();
-            arguments[i] = convertParameter(name, req.getParameter(name), parameter.getType());
+            arguments[i] = parameter.getType() == MapFile.class
+                ? bindFile(name, req)
+                : convertParameter(name, req.getParameter(name), parameter.getType());
         }
         return arguments;
     }
@@ -100,6 +106,17 @@ public class FrontControllerServlet extends HttpServlet {
     private Object bindBean(Class<?> beanType, HttpServletRequest req)
         throws ReflectiveOperationException {
         Object bean = beanType.getDeclaredConstructor().newInstance();
+
+        for (Field field : beanType.getDeclaredFields()) {
+            if (field.getType() == MapFile.class) {
+                MapFile file = bindFile(field.getName(), req);
+                if (file != null) {
+                    String name = field.getName();
+                    String setterName = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+                    beanType.getMethod(setterName, MapFile.class).invoke(bean, file);
+                }
+            }
+        }
 
         for (Map.Entry<String, String[]> entry : req.getParameterMap().entrySet()) {
             String name = entry.getKey();
@@ -115,9 +132,42 @@ public class FrontControllerServlet extends HttpServlet {
     private void setBeanProperty(Object bean, Class<?> beanType, String name, String value)
         throws ReflectiveOperationException {
         Class<?> fieldType = beanType.getDeclaredField(name).getType();
+        if (fieldType == MapFile.class) {
+            return;
+        }
         String setterName = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
         Method setter = beanType.getMethod(setterName, fieldType);
         setter.invoke(bean, convertParameter(name, value, fieldType));
+    }
+
+    private MapFile bindFile(String name, HttpServletRequest req) {
+        String contentType = req.getContentType();
+        if (contentType == null || !contentType.split(";", 2)[0].trim()
+                .equalsIgnoreCase("multipart/form-data")) {
+            return null;
+        }
+
+        try {
+            Part part = req.getPart(name);
+            if (part == null || part.getSubmittedFileName() == null
+                    || part.getSubmittedFileName().isEmpty()) {
+                return null;
+            }
+            String filename = part.getSubmittedFileName().replace('\\', '/');
+            filename = filename.substring(filename.lastIndexOf('/') + 1);
+            int dot = filename.lastIndexOf('.');
+            String extension = dot > 0 ? filename.substring(dot + 1) : "";
+            try (InputStream input = part.getInputStream()) {
+                byte[] bytes = input.readAllBytes();
+                Byte[] content = new Byte[bytes.length];
+                for (int i = 0; i < bytes.length; i++) {
+                    content[i] = bytes[i];
+                }
+                return new MapFile(filename, extension, content);
+            }
+        } catch (IOException | ServletException | IllegalStateException e) {
+            throw new BindingException("Impossible de lire le fichier : " + name);
+        }
     }
 
     private Object convertParameter(String name, String value, Class<?> type) {
@@ -155,7 +205,7 @@ public class FrontControllerServlet extends HttpServlet {
 
     private boolean verifyType(Class<?> type) {
         boolean supported =
-            type == String.class
+            type == MapFile.class || type == String.class
             || type == int.class || type == Integer.class
             || type == long.class || type == Long.class
             || type == double.class || type == Double.class;
