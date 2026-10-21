@@ -5,11 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.io.File;
+import java.io.IOException;
 
 import autumn.mapping.Mapping;
 import autumn.mapping.UrlKey;
 import autumn.utils.MethodScanner;
 import autumn.utils.ViewScanner;
+import autumn.config.AppConfig;
 
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletContextEvent;
@@ -17,15 +19,23 @@ import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
 import java.util.HashMap;
 
+
 @WebListener
 public class FrontControllerListener implements ServletContextListener {
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
+        ServletContext context = sce.getServletContext();
+
         try {
+            AppConfig.load();
+        } catch (IOException | IllegalArgumentException e) {
+            throw new IllegalStateException(
+                "Configuration Autumn invalide", e
+            );
+        }
 
-            ServletContext context = sce.getServletContext();
-
+        try {
             List<Class<?>> controllers = new ArrayList<>();
             List<File> views = new ArrayList<>();
 
