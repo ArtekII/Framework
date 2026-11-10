@@ -35,9 +35,9 @@ if [ "${#CLASSPATH_ENTRIES[@]}" -gt 0 ]; then
 fi
 
 if [ -n "$CLASSPATH" ]; then
-    javac -cp "$CLASSPATH" -d "$BUILD_DIR/classes" @"$SOURCES_FILE"
+    javac -parameters -cp "$CLASSPATH" -d "$BUILD_DIR/classes" @"$SOURCES_FILE"
 else
-    javac -d "$BUILD_DIR/classes" @"$SOURCES_FILE"
+    javac -parameters -d "$BUILD_DIR/classes" @"$SOURCES_FILE"
 fi
 
 # Générer le fichier .jar dans le dossier jar
