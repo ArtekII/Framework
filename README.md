@@ -1,5 +1,7 @@
 # Framework
 
+## Session utilisateur
+
 Le framework injecte `autumn.mapping.MySession` dans les paramètres des méthodes
 du contrôleur et dans ses champs d'instance, même privés ou hérités. Les champs
 injectés ne doivent pas être `final` ; les champs `static` sont ignorés.
@@ -29,6 +31,43 @@ public class ProfilController {
 }
 ```
 
+
+Ajouter `autumn.annotation.Auth` sur chaque méthode qui exige une connexion :
+
+```java
+import autumn.annotation.Auth;
+import autumn.annotation.UrlMapping;
+import autumn.mapping.MySession;
+
+@Auth
+@UrlMapping("/espace-prive")
+public String espacePrive(MySession session) {
+    return "Bonjour " + session.getAttribute(Auth.USER_ATTRIBUTE);
+}
+```
+
+Après validation des identifiants par l'application, enregistrer l'utilisateur
+validé dans la session avec la clé `Auth.USER_ATTRIBUTE`, dont la valeur est
+`"auth.user"` :
+
+```java
+session.setAttribute(Auth.USER_ATTRIBUTE, utilisateurValide);
+```
+
+Le framework fournit le contrôle d'accès ; l'application reste responsable de
+vérifier les identifiants. Un paramètre de requête nommé `auth.user` ne donne
+aucun accès. Une session existante sans cet attribut reste anonyme.
+
+Avant de construire le contrôleur ou de lire ses paramètres, le servlet consulte
+la session existante via `getSession(false)`. Une méthode annotée `@Auth` renvoie
+HTTP **401** si la session est absente, expirée ou sans utilisateur authentifié.
+La réponse contient un message en texte ; avec `@WebApiRest`, elle contient un
+objet JSON avec une propriété `error`. Aucune session n'est créée par ce contrôle.
+Une méthode sans `@Auth` reste publique. Le contrôle s'applique aussi aux routes POST.
+
+Pour retirer l'authentification, supprimer `Auth.USER_ATTRIBUTE` ou appeler
+`session.invalidate()` pour détruire toute la session. Les requêtes suivantes
+vers les méthodes protégées sont alors refusées.
 
 ## Réponses JSON
 

@@ -4,6 +4,8 @@ package autumn.listener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.io.File;
 import java.io.IOException;
 
@@ -17,11 +19,19 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSessionEvent;
+import jakarta.servlet.http.HttpSessionIdListener;
+import jakarta.servlet.http.HttpSessionListener;
 import java.util.HashMap;
 
 
 @WebListener
-public class FrontControllerListener implements ServletContextListener {
+public class FrontControllerListener
+        implements ServletContextListener, HttpSessionListener, HttpSessionIdListener {
+
+    public static final String SESSIONS_ATTRIBUTE = "sessions";
+    private final ConcurrentMap<String, HttpSession> sessions = new ConcurrentHashMap<>();
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
@@ -39,7 +49,7 @@ public class FrontControllerListener implements ServletContextListener {
             List<Class<?>> controllers = new ArrayList<>();
             List<File> views = new ArrayList<>();
 
-            Map<UrlKey, Mapping> routes = new HashMap();
+            Map<UrlKey, Mapping> routes = new HashMap<>();
 
 
             String packageName = context.getInitParameter("controller");
@@ -58,9 +68,35 @@ public class FrontControllerListener implements ServletContextListener {
 
             context.setAttribute("routes", routes);
             context.setAttribute("views", views);
+            context.setAttribute(SESSIONS_ATTRIBUTE, sessions);
 
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void sessionCreated(HttpSessionEvent event) {
+        HttpSession session = event.getSession();
+        sessions.put(session.getId(), session);
+    }
+
+    @Override
+    public void sessionDestroyed(HttpSessionEvent event) {
+        HttpSession session = event.getSession();
+        sessions.remove(session.getId(), session);
+    }
+
+    @Override
+    public void sessionIdChanged(HttpSessionEvent event, String oldSessionId) {
+        HttpSession session = event.getSession();
+        sessions.remove(oldSessionId, session);
+        sessions.put(session.getId(), session);
+    }
+
+    @Override
+    public void contextDestroyed(ServletContextEvent event) {
+        sessions.clear();
+        event.getServletContext().removeAttribute(SESSIONS_ATTRIBUTE);
     }
 }
