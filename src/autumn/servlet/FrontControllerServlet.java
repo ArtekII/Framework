@@ -14,7 +14,6 @@ import autumn.rendering.ResponseRenderer;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
-import autumn.mapping.MySession;
 
 @MultipartConfig 
 public class FrontControllerServlet extends HttpServlet {
@@ -77,17 +76,9 @@ public class FrontControllerServlet extends HttpServlet {
         Object controller = controllerClass.getDeclaredConstructor().newInstance();
 
         Object[] arguments = requestBinder.bindArguments(method, req);
+        requestBinder.injectSessionFields(controller, arguments, req);
 
-        Object result = method.invoke(controller, arguments);
-
-        for (Object argument : arguments) {
-            if (argument instanceof MySession) {
-                ((MySession) argument).save();
-                break;
-            }
-        }
-
-        return result;
+        return method.invoke(controller, arguments);
     }
 
     
@@ -103,5 +94,4 @@ public class FrontControllerServlet extends HttpServlet {
         processRequest(req, res);
     }
 
-    // Sprint 9 :faire en sorte que le session de l'utilisateur soit disponible dans le controller.
 }

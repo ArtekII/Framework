@@ -1,5 +1,35 @@
 # Framework
 
+Le framework injecte `autumn.mapping.MySession` dans les paramètres des méthodes
+du contrôleur et dans ses champs d'instance, même privés ou hérités. Les champs
+injectés ne doivent pas être `final` ; les champs `static` sont ignorés.
+Tous les paramètres et champs injectés d'un même appel partagent la même instance.
+
+```java
+import autumn.annotation.Controller;
+import autumn.annotation.UrlMapping;
+import autumn.mapping.MySession;
+
+@Controller
+public class ProfilController {
+    private MySession session;
+
+    @UrlMapping("/profil")
+    public String profil(MySession utilisateur) {
+        // utilisateur et session désignent la même instance.
+        utilisateur.setAttribute("nom", "Alice");
+        return (String) session.getAttribute("nom");
+    }
+
+    @UrlMapping(value = "/deconnexion", method = "POST")
+    public String deconnexion() {
+        session.invalidate();
+        return "Déconnecté";
+    }
+}
+```
+
+
 ## Réponses JSON
 
 Ajouter `@WebApiRest` sur une méthode de controller, en plus de `@UrlMapping`.

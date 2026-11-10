@@ -41,6 +41,37 @@ public class RequestBinder {
         return arguments;
     }
 
+    public void injectSessionFields(Object controller, Object[] arguments, HttpServletRequest req)
+        throws IllegalAccessException {
+        MySession session = null;
+        for (Object argument : arguments) {
+            if (argument instanceof MySession) {
+                session = (MySession) argument;
+                break;
+            }
+        }
+
+        for (Class<?> current = controller.getClass();
+                current != null && current != Object.class;
+                current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                if (field.getType() != MySession.class
+                        || Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                    continue;
+                }
+                if (Modifier.isFinal(field.getModifiers())) {
+                    throw new IllegalArgumentException("Le champ de session "
+                        + current.getName() + "." + field.getName() + " ne doit pas etre final.");
+                }
+                if (session == null) {
+                    session = new MySession(req.getSession());
+                }
+                field.setAccessible(true);
+                field.set(controller, session);
+            }
+        }
+    }
+
     private Object bindBean(Class<?> beanType, HttpServletRequest req, String path)
         throws ReflectiveOperationException, IOException, ServletException {
         if (beanType.isPrimitive() || beanType.isArray() || beanType.isInterface()

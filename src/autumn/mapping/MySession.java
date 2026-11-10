@@ -1,34 +1,31 @@
 package autumn.mapping;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Enumeration;
+
+import java.util.Objects;
 import jakarta.servlet.http.HttpSession;
 
 public class MySession {
-    private final Map<String, Object> sessionData = new HashMap<>();
     private final HttpSession httpSession;
 
-     public MySession(HttpSession httpSession) {
-        this.httpSession = httpSession;
-
-        Enumeration<String> names = httpSession.getAttributeNames();
-        while (names.hasMoreElements()) {
-            String name = names.nextElement();
-            sessionData.put(name, httpSession.getAttribute(name));
-        }
+    public MySession(HttpSession httpSession) {
+        this.httpSession = Objects.requireNonNull(httpSession, "httpSession");
     }
 
     public void setAttribute(String key, Object value) {
-        sessionData.put(key, value);
+        httpSession.setAttribute(key, value);
     }
 
     public Object getAttribute(String key) {
-        return sessionData.get(key);
+        return httpSession.getAttribute(key);
+    }
+
+    public void removeAttribute(String key) {
+        httpSession.removeAttribute(key);
+    }
+
+    public void invalidate() {
+        httpSession.invalidate();
     }
 
     public void save() {
-        for (Map.Entry<String, Object> entry : sessionData.entrySet()) {
-            httpSession.setAttribute(entry.getKey(), entry.getValue());
-        }
     }
 }
