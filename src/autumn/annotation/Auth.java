@@ -9,4 +9,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Auth {
     String USER_ATTRIBUTE = "auth.user";
+    String ROLE_ATTRIBUTE = "auth.role";
+
+    /** Roles autorises : un seul role correspondant suffit. Vide = connexion uniquement. */
+    String[] roles() default {};
 }

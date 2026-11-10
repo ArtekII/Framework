@@ -57,9 +57,17 @@ public class FrontControllerServlet extends HttpServlet {
         try {
             Method method = mapping.getMethod();
             rest = method.isAnnotationPresent(WebApiRest.class);
-            if (method.isAnnotationPresent(Auth.class) && !isAuthenticated(req)) {
-                responseRenderer.writeUnauthorized(res, rest);
-                return;
+            Auth auth = method.getAnnotation(Auth.class);
+            if (auth != null) {
+                int accessStatus = checkAccess(auth, req);
+                if (accessStatus == HttpServletResponse.SC_UNAUTHORIZED) {
+                    responseRenderer.writeUnauthorized(res, rest);
+                    return;
+                }
+                if (accessStatus == HttpServletResponse.SC_FORBIDDEN) {
+                    responseRenderer.writeForbidden(res, rest);
+                    return;
+                }
             }
             Class<?> controllerClass = Class.forName(mapping.getNomClasse());
             Object result = invokeController(controllerClass, method, req);
@@ -76,16 +84,26 @@ public class FrontControllerServlet extends HttpServlet {
         return path.isEmpty() ? "/" : path;
     }
 
-    private boolean isAuthenticated(HttpServletRequest req) {
-        HttpSession session = req.getSession(false);
-        if (session == null) {
-            return false;
-        }
+    private int checkAccess(Auth auth, HttpServletRequest req) {
         try {
-            return session.getAttribute(Auth.USER_ATTRIBUTE) != null;
+            HttpSession session = req.getSession(false);
+            if (session == null || session.getAttribute(Auth.USER_ATTRIBUTE) == null) {
+                return HttpServletResponse.SC_UNAUTHORIZED;
+            }
+            String[] allowedRoles = auth.roles();
+            if (allowedRoles.length == 0) {
+                return HttpServletResponse.SC_OK;
+            }
+            Object role = session.getAttribute(Auth.ROLE_ATTRIBUTE);
+            for (String allowedRole : allowedRoles) {
+                if (!allowedRole.isBlank() && allowedRole.equals(role)) {
+                    return HttpServletResponse.SC_OK;
+                }
+            }
+            return HttpServletResponse.SC_FORBIDDEN;
         } catch (IllegalStateException expired) {
             // Une autre requete peut invalider la session pendant la verification.
-            return false;
+            return HttpServletResponse.SC_UNAUTHORIZED;
         }
     }
 
