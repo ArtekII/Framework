@@ -69,6 +69,47 @@ Pour retirer l'authentification, supprimer `Auth.USER_ATTRIBUTE` ou appeler
 `session.invalidate()` pour détruire toute la session. Les requêtes suivantes
 vers les méthodes protégées sont alors refusées.
 
+## Autorisation par rôle
+
+Pour associer une méthode à un rôle, préciser `roles` sur `@Auth` :
+
+```java
+@Auth(roles = "ADMIN")
+@UrlMapping("/administration")
+public String administration() {
+    return "Accès administrateur autorisé";
+}
+
+@Auth(roles = {"USER", "ADMIN"})
+@UrlMapping("/documents")
+public String documents() {
+    return "Accès autorisé à USER ou ADMIN";
+}
+```
+
+Après validation des identifiants, l'application enregistre l'utilisateur et son
+rôle en session. Le rôle doit provenir des données validées côté serveur :
+
+```java
+session.setAttribute(Auth.USER_ATTRIBUTE, utilisateurValide);
+session.setAttribute(Auth.ROLE_ATTRIBUTE, "ADMIN"); // clé : auth.role
+```
+
+`Auth.ROLE_ATTRIBUTE` contient un rôle sous forme de `String`. Une méthode peut
+accepter plusieurs rôles : une seule correspondance suffit. La comparaison est
+exacte et sensible à la casse ; `ADMIN` n'accorde pas automatiquement `USER`.
+
+- Sans utilisateur authentifié : HTTP **401**, même si un rôle est présent.
+- Utilisateur authentifié avec un rôle absent, mal typé ou non autorisé : HTTP **403**.
+- Utilisateur authentifié avec un rôle autorisé : exécution de la méthode.
+- `@Auth` sans `roles` conserve son comportement : seule la connexion est exigée.
+
+Le contrôle précède la construction du contrôleur et la lecture des paramètres,
+en GET comme en POST. Avec `@WebApiRest`, les refus 401 et 403 sont rendus en JSON.
+Un paramètre HTTP `auth.role=ADMIN` ne modifie pas le rôle en session. Lors d'un
+changement d'utilisateur, remplacer aussi son rôle pour ne pas conserver celui
+de la connexion précédente ; `invalidate()` efface les deux à la déconnexion.
+
 ## Réponses JSON
 
 Ajouter `@WebApiRest` sur une méthode de controller, en plus de `@UrlMapping`.

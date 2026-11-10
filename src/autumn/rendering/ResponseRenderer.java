@@ -89,9 +89,19 @@ public final class ResponseRenderer {
     }
 
     public void writeUnauthorized(HttpServletResponse res, boolean rest) throws IOException {
-        res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        writeAccessError(res, HttpServletResponse.SC_UNAUTHORIZED,
+            "Authentification requise pour acceder a cette ressource", rest);
+    }
+
+    public void writeForbidden(HttpServletResponse res, boolean rest) throws IOException {
+        writeAccessError(res, HttpServletResponse.SC_FORBIDDEN,
+            "Acces refuse : role insuffisant pour acceder a cette ressource", rest);
+    }
+
+    private void writeAccessError(HttpServletResponse res, int status, String message, boolean rest)
+        throws IOException {
+        res.setStatus(status);
         res.setCharacterEncoding("UTF-8");
-        String message = "Authentification requise pour acceder a cette ressource";
         if (rest) {
             writeJson(res, gson.toJson(Map.of("error", message)));
         } else {
