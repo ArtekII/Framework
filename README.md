@@ -1,34 +1,34 @@
 # Framework
 
-## Upload de fichiers
-
-Un champ de formulaire est automatiquement lié à un argument `MapFile`,
-ou à un attribut `MapFile` du bean passé au controller (avec un setter public).
-Le nom du champ HTML doit correspondre au nom du paramètre ou de l'attribut.
-
-```html
-<form action="upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="document">
-    <button type="submit">Envoyer</button>
-</form>
-```
+Le framework injecte `autumn.mapping.MySession` dans les paramètres des méthodes
+du contrôleur et dans ses champs d'instance, même privés ou hérités. Les champs
+injectés ne doivent pas être `final` ; les champs `static` sont ignorés.
+Tous les paramètres et champs injectés d'un même appel partagent la même instance.
 
 ```java
-public String upload(MapFile document) {
-    return document == null ? "Aucun fichier" : document.getFilename();
+import autumn.annotation.Controller;
+import autumn.annotation.UrlMapping;
+import autumn.mapping.MySession;
+
+@Controller
+public class ProfilController {
+    private MySession session;
+
+    @UrlMapping("/profil")
+    public String profil(MySession utilisateur) {
+        // utilisateur et session désignent la même instance.
+        utilisateur.setAttribute("nom", "Alice");
+        return (String) session.getAttribute("nom");
+    }
+
+    @UrlMapping(value = "/deconnexion", method = "POST")
+    public String deconnexion() {
+        session.invalidate();
+        return "Déconnecté";
+    }
 }
 ```
 
-`MapFile` contient le nom complet sans chemin (`report.pdf`), l'extension
-sans point (`pdf`) et le contenu sous forme de `Byte[]`. Un fichier absent
-donne `null` ; un fichier sélectionné de zéro octet reste un `MapFile` valide.
-Les fichiers sont chargés entièrement en mémoire.
-
-Compiler les controllers avec `javac -parameters` pour conserver les noms
-des arguments. Le script `make-jar.sh` utilise aussi cette option.
-Le servlet porte `@MultipartConfig` ; si les annotations sont désactivées
-dans le déploiement, déclarer `<multipart-config/>` dans sa déclaration
-`<servlet>` du `web.xml`.
 
 ## Réponses JSON
 

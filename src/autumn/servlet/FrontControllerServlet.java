@@ -5,16 +5,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Map;
-import com.google.gson.Gson;
 import autumn.annotation.WebApiRest;
 import java.lang.reflect.Field;
 import autumn.mapping.Mapping;
 import autumn.mapping.MapFile;
 import autumn.mapping.ModelAndView;
 import autumn.mapping.UrlKey;
+import autumn.binding.BindingException;
+import autumn.binding.RequestBinder;
+import autumn.rendering.ResponseRenderer;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
@@ -22,15 +23,12 @@ import jakarta.servlet.http.*;
 
 @MultipartConfig
 public class FrontControllerServlet extends HttpServlet {
-    private static class BindingException extends RuntimeException {
-        BindingException(String message) {
-            super(message);
-        }
-    }
-    private final Gson gson = new Gson();
-    List<Class<?>> listController;
+    
+    private ResponseRenderer responseRenderer;
+    private final RequestBinder requestBinder = new RequestBinder();
     private Map<UrlKey, Mapping> routes;
     private List<File> views;
+
 
     @Override
     public void init() throws ServletException {
@@ -40,6 +38,7 @@ public class FrontControllerServlet extends HttpServlet {
         if (routes == null) {
             throw new ServletException("Les routes n'ont pas été initialisées.");
         }
+        responseRenderer = new ResponseRenderer(context, routes, views);
     }
 
     protected void processRequest(HttpServletRequest req, HttpServletResponse res)
@@ -48,13 +47,13 @@ public class FrontControllerServlet extends HttpServlet {
         String url = getRequestPath(req);
 
         if ("/".equals(url)) {
-            writeValidRoutes(res.getWriter());
+            responseRenderer.writeValidRoutes(res.getWriter());
             return;
         }
 
         Mapping mapping = routes.get(new UrlKey(url, req.getMethod()));
         if (mapping == null) {
-            writeNotFound(res, url);
+            responseRenderer.writeNotFound(res, url);
             return;
         }
 
@@ -64,11 +63,11 @@ public class FrontControllerServlet extends HttpServlet {
             Method method = mapping.getMethod();
             rest = method.isAnnotationPresent(WebApiRest.class);
             Object result = invokeController(controllerClass, method, req);
-            renderResult(req, res, result, rest);
+            responseRenderer.renderResult(req, res, result, rest);
         } catch (BindingException e) {
-            writeBindingError(res, e, rest);
+            responseRenderer.writeBindingError(res, e, rest);
         } catch (Exception e) {
-            writeServerError(res, e, rest);
+            responseRenderer.writeServerError(res, e, rest);
         }
     }
 
@@ -210,118 +209,15 @@ public class FrontControllerServlet extends HttpServlet {
             || type == long.class || type == Long.class
             || type == double.class || type == Double.class;
 
+        Object controller = controllerClass.getDeclaredConstructor().newInstance();
 
-        return supported;
-    }
-    private void renderResult(HttpServletRequest req, HttpServletResponse res,
-                              Object result, boolean rest) throws ServletException, IOException {
-        if (rest) {
-            String json = result instanceof String ? (String) result : gson.toJson(result);
-            writeJson(res, json);
-            return;
-        }
+        Object[] arguments = requestBinder.bindArguments(method, req);
+        requestBinder.injectSessionFields(controller, arguments, req);
 
-        PrintWriter writer = res.getWriter();
-        if (result instanceof ModelAndView) {
-            renderView(req, res, (ModelAndView) result);
-        } else if (result != null) {
-            writer.write("<br>Resultat : " + result.toString());
-        }
+        return method.invoke(controller, arguments);
     }
 
-    private void renderView(HttpServletRequest req, HttpServletResponse res,
-                            ModelAndView modelAndView) throws ServletException, IOException {
-        String prefix = getServletContext().getInitParameter("prefix");
-        String suffix = getServletContext().getInitParameter("suffix");
-        String viewPath = prefix + modelAndView.getUrl() + suffix;
-
-        if (!viewExists(viewPath)) {
-            res.getWriter().write("<br>La vue " + viewPath + " n'existe pas.");
-            return;
-        }
-
-        Map<String, Object> model = modelAndView.getModel();
-        if (!model.isEmpty()) {
-            for (Map.Entry<String, Object> entry : model.entrySet()) {
-                req.setAttribute(entry.getKey(), entry.getValue());
-            }
-        }
-        req.getRequestDispatcher(viewPath).forward(req, res);
-    }
-
-    private boolean viewExists(String viewPath) {
-        String realPath = getServletContext().getRealPath(viewPath);
-        for (File view : views) {
-            if (view.getAbsolutePath().equals(realPath)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void writeJson(HttpServletResponse res, String json) throws IOException {
-        res.setContentType("application/json");
-        res.setCharacterEncoding("UTF-8");
-        res.getWriter().write(json);
-    }
-
-    private void writeNotFound(HttpServletResponse res, String url) throws IOException {
-        PrintWriter writer = res.getWriter();
-        res.setStatus(HttpServletResponse.SC_NOT_FOUND);
-        writer.write("<h1>Erreur 404</h1>");
-        writer.write("<p>" + url + " n'est pas un lien valide </p>");
-        writeValidRoutes(writer);
-    }
-
-    private void writeBindingError(HttpServletResponse res, BindingException error, boolean rest)
-        throws IOException {
-        res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        res.setCharacterEncoding("UTF-8");
-        if (rest) {
-            writeJson(res, gson.toJson(Map.of("error", error.getMessage())));
-        } else {
-            res.setContentType("text/plain");
-            res.getWriter().write(error.getMessage());
-        }
-    }
-
-    private void writeServerError(HttpServletResponse res, Exception error, boolean rest)
-        throws IOException {
-        res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        if (rest) {
-            writeJson(res, "{\"error\":\"Erreur lors de l'execution de la methode\"}");
-            getServletContext().log("Erreur dans une methode REST", error);
-            return;
-        }
-
-        PrintWriter writer = res.getWriter();
-        writer.write("<h1>Erreur 500</h1>");
-        writer.write("<p>Une erreur est survenue lors de l'execution de la methode</p>");
-        writer.write("<pre>" + error.getMessage() + "</pre>");
-        error.printStackTrace(writer);
-    }
-
-    private void writeValidRoutes(PrintWriter writer) {
-        writer.write("<h2>URLs valides</h2>");
-
-        if (routes.isEmpty()) {
-            writer.write("<p>Aucune URL n'est enregistree.</p>");
-            return;
-        }
-
-        writer.write("<ul>");
-        for (Map.Entry<UrlKey, Mapping> entry : routes.entrySet()) {
-            Mapping mapping = entry.getValue();
-            writer.write("<li>");
-            writer.write(entry.getKey().toString());
-            writer.write(" - " + mapping.getNomClasse() + "#Methode :" + mapping.getNomMethode());
-            writer.write("</li>");
-        }
-        writer.write("</ul>");
-    }
-
-
-
+    
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res)
         throws ServletException, IOException {
@@ -333,4 +229,5 @@ public class FrontControllerServlet extends HttpServlet {
         throws ServletException, IOException {
         processRequest(req, res);
     }
+
 }
