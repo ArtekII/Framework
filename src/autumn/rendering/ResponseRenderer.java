@@ -88,6 +88,18 @@ public final class ResponseRenderer {
         writeValidRoutes(writer);
     }
 
+    public void writeUnauthorized(HttpServletResponse res, boolean rest) throws IOException {
+        res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        res.setCharacterEncoding("UTF-8");
+        String message = "Authentification requise pour acceder a cette ressource";
+        if (rest) {
+            writeJson(res, gson.toJson(Map.of("error", message)));
+        } else {
+            res.setContentType("text/plain");
+            res.getWriter().write(message);
+        }
+    }
+
     public void writeBindingError(HttpServletResponse res, BindingException error, boolean rest)
         throws IOException {
         res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
