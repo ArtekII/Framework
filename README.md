@@ -1,11 +1,27 @@
 # Framework
 
+## Instances des contrôleurs
+
+Au démarrage, `FrontControllerListener` crée une instance de chaque classe
+`@Controller`, avec son constructeur sans paramètre. Les instances sont publiées
+dans une map non modifiable du `ServletContext`, sous la clé `"controllers"`
+(`FrontControllerListener.CONTROLLERS_ATTRIBUTE`). Toutes les requêtes et toutes
+les méthodes d'une même classe réutilisent cette instance. Un redéploiement crée
+de nouvelles instances ; l'arrêt retire le registre du contexte.
+
+Un contrôleur est partagé entre les utilisateurs et peut exécuter plusieurs
+requêtes simultanément. Les données de requête, l'utilisateur et sa session
+doivent rester dans les paramètres et les variables locales. Les champs servant
+à partager des services doivent être adaptés aux accès concurrents.
+
 ## Session utilisateur
 
 Le framework injecte `autumn.mapping.MySession` dans les paramètres des méthodes
-du contrôleur et dans ses champs d'instance, même privés ou hérités. Les champs
-injectés ne doivent pas être `final` ; les champs `static` sont ignorés.
-Tous les paramètres et champs injectés d'un même appel partagent la même instance.
+du contrôleur. Les paramètres `MySession` d'un même appel partagent la même
+instance ; chaque appel dispose de son propre objet lié à sa session HTTP.
+L'injection dans les champs est supprimée. Un champ `MySession`, privé, hérité
+ou statique, empêche le démarrage avec un message demandant de le remplacer par
+un paramètre. Cela évite de partager la session d'un utilisateur dans le contrôleur.
 
 ```java
 import autumn.annotation.Controller;
@@ -14,17 +30,14 @@ import autumn.mapping.MySession;
 
 @Controller
 public class ProfilController {
-    private MySession session;
-
     @UrlMapping("/profil")
-    public String profil(MySession utilisateur) {
-        // utilisateur et session désignent la même instance.
-        utilisateur.setAttribute("nom", "Alice");
+    public String profil(MySession session) {
+        session.setAttribute("nom", "Alice");
         return (String) session.getAttribute("nom");
     }
 
     @UrlMapping(value = "/deconnexion", method = "POST")
-    public String deconnexion() {
+    public String deconnexion(MySession session) {
         session.invalidate();
         return "Déconnecté";
     }
@@ -58,7 +71,7 @@ Le framework fournit le contrôle d'accès ; l'application reste responsable de
 vérifier les identifiants. Un paramètre de requête nommé `auth.user` ne donne
 aucun accès. Une session existante sans cet attribut reste anonyme.
 
-Avant de construire le contrôleur ou de lire ses paramètres, le servlet consulte
+À chaque requête, avant de lire les paramètres et d'appeler la méthode, le servlet consulte
 la session existante via `getSession(false)`. Une méthode annotée `@Auth` renvoie
 HTTP **401** si la session est absente, expirée ou sans utilisateur authentifié.
 La réponse contient un message en texte ; avec `@WebApiRest`, elle contient un
@@ -104,7 +117,7 @@ exacte et sensible à la casse ; `ADMIN` n'accorde pas automatiquement `USER`.
 - Utilisateur authentifié avec un rôle autorisé : exécution de la méthode.
 - `@Auth` sans `roles` conserve son comportement : seule la connexion est exigée.
 
-Le contrôle précède la construction du contrôleur et la lecture des paramètres,
+Le contrôle précède la lecture des paramètres et l'appel de la méthode,
 en GET comme en POST. Avec `@WebApiRest`, les refus 401 et 403 sont rendus en JSON.
 Un paramètre HTTP `auth.role=ADMIN` ne modifie pas le rôle en session. Lors d'un
 changement d'utilisateur, remplacer aussi son rôle pour ne pas conserver celui

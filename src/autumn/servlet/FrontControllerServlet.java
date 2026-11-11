@@ -11,6 +11,7 @@ import autumn.mapping.Mapping;
 import autumn.mapping.UrlKey;
 import autumn.binding.BindingException;
 import autumn.binding.RequestBinder;
+import autumn.listener.FrontControllerListener;
 import autumn.rendering.ResponseRenderer;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.MultipartConfig;
@@ -23,16 +24,22 @@ public class FrontControllerServlet extends HttpServlet {
     private ResponseRenderer responseRenderer;
     private final RequestBinder requestBinder = new RequestBinder();
     private Map<UrlKey, Mapping> routes;
+    private Map<Class<?>, Object> controllers;
     private List<File> views;
 
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         routes = (Map<UrlKey, Mapping>) context.getAttribute("routes");
         views = (List<File>) context.getAttribute("views");
+        controllers = (Map<Class<?>, Object>) context.getAttribute(FrontControllerListener.CONTROLLERS_ATTRIBUTE);
         if (routes == null) {
             throw new ServletException("Les routes n'ont pas été initialisées.");
+        }
+        if (controllers == null) {
+            throw new ServletException("Les instances des controllers n'ont pas ete initialisees.");
         }
         responseRenderer = new ResponseRenderer(context, routes, views);
     }
@@ -69,8 +76,7 @@ public class FrontControllerServlet extends HttpServlet {
                     return;
                 }
             }
-            Class<?> controllerClass = Class.forName(mapping.getNomClasse());
-            Object result = invokeController(controllerClass, method, req);
+            Object result = invokeController(method, req);
             responseRenderer.renderResult(req, res, result, rest);
         } catch (BindingException e) {
             responseRenderer.writeBindingError(res, e, rest);
@@ -107,13 +113,14 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    private Object invokeController(Class<?> controllerClass, Method method,
-                                    HttpServletRequest req)
+    private Object invokeController(Method method, HttpServletRequest req)
         throws ReflectiveOperationException, IOException, ServletException {
-        Object controller = controllerClass.getDeclaredConstructor().newInstance();
+        Object controller = controllers.get(method.getDeclaringClass());
+        if (controller == null) {
+            throw new ServletException("Controller non initialise : " + method.getDeclaringClass().getName());
+        }
 
         Object[] arguments = requestBinder.bindArguments(method, req);
-        requestBinder.injectSessionFields(controller, arguments, req);
 
         return method.invoke(controller, arguments);
     }
